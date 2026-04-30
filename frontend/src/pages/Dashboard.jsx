@@ -1,75 +1,123 @@
-import React, { useState } from 'react';
-import { useGetTasksQuery, useCreateTaskMutation, useDeleteTaskMutation, useUpdateTaskMutation } from '../features/tasks/tasksApiSlice';
-import { Plus, Trash2, CheckCircle, Circle, Clock } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
+import { io } from "socket.io-client";
+import toast, { Toaster } from "react-hot-toast";
+import { Plus } from "lucide-react";
+import { useGetTasksQuery } from "../features/tasks/tasksApiSlice";
+import TaskForm from "../components/TaskForm";
+import TaskCard from "../components/TaskCard";
+import NotificationController from "../components/NotificationController";
+
+const socket = io("http://localhost:5000", { withCredentials: true });
 
 const Dashboard = () => {
-  const [title, setTitle] = useState('');
+  const [editTask, setEditTask] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const { data: tasks, isLoading } = useGetTasksQuery();
-  const [createTask] = useCreateTaskMutation();
-  const [deleteTask] = useDeleteTaskMutation();
-  const [updateTask] = useUpdateTaskMutation();
+  const userInfo = useSelector((state) => state.auth);
 
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-    await createTask({ title });
-    setTitle('');
+  useEffect(() => {
+    if (editTask) {
+      setIsModalOpen(true);
+    }
+  }, [editTask]);
+
+  const closeForm = () => {
+    setIsModalOpen(false);
+    setEditTask(null);
   };
 
-  if (isLoading) return <div className="flex justify-center p-20 text-blue-600 font-bold">Loading your workflow...</div>;
+  useEffect(() => {
+    const userId = userInfo?.user?._id;
+
+    if (userId) {
+      const emitJoin = () => {
+        socket.emit("join", userId);
+      };
+
+      if (socket.connected) {
+        emitJoin();
+      } else {
+        socket.on("connect", emitJoin);
+      }
+
+      socket.on("task_reminder", (data) => {
+        toast.success(`Reminder: ${data.title}`);
+        new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3")
+          .play()
+          .catch(() => {});
+      });
+
+      return () => {
+        socket.off("connect", emitJoin);
+        socket.off("task_reminder");
+      };
+    }
+  }, [userInfo]);
+
+  if (isLoading)
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-blue-600 font-bold">Syncing your workspace...</p>
+      </div>
+    );
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <header className="mb-10 text-center">
-        <h1 className="text-4xl font-extrabold text-gray-900 mb-2">My Productivity</h1>
-        <p className="text-gray-500">Manage your daily tasks and stay organized.</p>
+    <div className="max-w-4xl mx-auto px-4 py-6 md:py-12 pb-24 md:pb-12">
+      <Toaster position="top-right" />
+      <NotificationController />
+      
+      <header className="mb-8">
+        <h1 className="text-3xl font-black text-gray-900">Workspace</h1>
+        <p className="text-gray-500">Manage your goals and daily targets</p>
       </header>
 
-      {/* Quick Add Form */}
-      <form onSubmit={handleAdd} className="mb-8 flex gap-2">
-        <input 
-          type="text" 
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="What needs to be done?" 
-          className="flex-1 p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm transition"
-        />
-        <button className="bg-blue-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-2 shadow-lg shadow-blue-200">
-          <Plus size={20} /> Add
-        </button>
-      </form>
-
-      {/* Task List */}
-      <div className="space-y-4">
-        {tasks?.length === 0 && <div className="text-center py-10 text-gray-400 italic">No tasks found. Relax or add a new one!</div>}
-        
-        {tasks?.map((task) => (
-          <div key={task._id} className="group flex items-center justify-between p-5 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition duration-300">
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => updateTask({ id: task._id, status: task.status === 'completed' ? 'pending' : 'completed' })}
-                className="text-gray-400 hover:text-blue-600 transition"
-              >
-                {task.status === 'completed' ? <CheckCircle className="text-green-500" /> : <Circle />}
-              </button>
-              <div>
-                <h3 className={`font-semibold text-gray-800 ${task.status === 'completed' ? 'line-through text-gray-400' : ''}`}>
-                  {task.title}
-                </h3>
-                <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
-                  <Clock size={12} /> {new Date(task.createdAt).toLocaleDateString()}
-                </div>
-              </div>
-            </div>
-            <button 
-              onClick={() => deleteTask(task._id)}
-              className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition"
-            >
-              <Trash2 size={18} />
-            </button>
-          </div>
-        ))}
+      {/* PC View: Inline Form */}
+      <div className="hidden md:block mb-10">
+        <TaskForm editTask={editTask} setEditTask={closeForm} />
       </div>
+
+      {/* Mobile Modal View */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm md:hidden">
+          <div className="w-full max-h-[90vh] overflow-y-auto">
+            <TaskForm editTask={editTask} setEditTask={closeForm} isModal={true} closeModal={closeForm} />
+          </div>
+        </div>
+      )}
+
+      {/* Task List Header */}
+      <div className="flex items-center justify-between mb-6 px-2">
+        <h2 className="text-lg md:text-xl font-black text-gray-800">
+          Your Tasks <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded-full">{tasks?.length || 0}</span>
+        </h2>
+      </div>
+
+      {/* --- FIXED SECTION: MAPPING TASKS --- */}
+      {tasks && tasks.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {tasks.map((task) => (
+            <TaskCard 
+              key={task._id} 
+              task={task} 
+              onEdit={() => setEditTask(task)} 
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+          <p className="text-gray-400 font-medium">No tasks found. Start by adding one!</p>
+        </div>
+      )}
+
+      {/* Mobile Floating Action Button */}
+      <button
+        onClick={() => setIsModalOpen(true)}
+        className="md:hidden fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-2xl z-40 active:scale-95 transition-transform"
+      >
+        <Plus size={28} />
+      </button>
     </div>
   );
 };

@@ -1,37 +1,37 @@
-import cron from 'node-cron';
-import Task from '../models/Task.js';
+import cron from "node-cron";
+import Task from "../models/Task.js";
 
 export const startReminderCron = (io) => {
-  // Runs every minute to check for pending reminders
-  cron.schedule('* * * * *', async () => {
-    const now = new Date();
-    
+  // Runs every minute
+  cron.schedule("* * * * *", async () => {
     try {
-      // Find tasks where reminder time has passed and notification hasn't been sent
-      const tasksToNotify = await Task.find({
+      const now = new Date();
+
+      // Find tasks that are due, not yet notified, and still pending
+      const dueTasks = await Task.find({
         reminderAt: { $lte: now },
         isNotified: false,
-        status: 'pending'
+        status: "pending",
       });
 
-      if (tasksToNotify.length > 0) {
-        for (const task of tasksToNotify) {
-          // Send real-time event to the specific user's room
-          io.to(task.user.toString()).emit('taskReminder', {
+      if (dueTasks.length > 0) {
+        dueTasks.forEach(async (task) => {
+          const userId = task.user.toString();
+
+          // Emitting specifically to the user's room
+          io.to(userId).emit("task_reminder", {
             title: task.title,
-            category: task.category,
-            id: task._id
+            description: task.description,
           });
 
-          // Mark as notified in the DB to prevent repeat alerts
           task.isNotified = true;
           await task.save();
-          
-          console.log(`🔔 Notification sent for task: ${task.title}`);
-        }
+        });
+
+        console.log(`🔔 Sent notifications for ${dueTasks.length} tasks.`);
       }
     } catch (error) {
-      console.error('❌ Cron Job Error:', error);
+      console.error("Cron Error:", error);
     }
   });
 };
