@@ -19,7 +19,7 @@ const authSlice = createSlice({
   reducers: {
     setCredentials: (state, action) => {
   // Debug: Log the payload to see exactly where the token is
-  console.log("Login Payload:", action.payload);
+  // console.log("Login Payload:", action.payload);
 
   // Adjust these lines based on your actual backend response structure
   const user = action.payload.user || action.payload; 
