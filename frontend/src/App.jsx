@@ -6,7 +6,10 @@ import { useSelector } from 'react-redux';
 import NavBar from './components/NavBar'; // Ensure these are imported
 import Footer from './components/Footer';
 
-const socket = io('https://syntecxhub-task-manager-app-backend.vercel.app');
+const socket = io("https://syntecxhub-task-manager-app-backend.vercel.app", {
+  transports: ["websocket"], // Force WebSocket, skip polling
+  upgrade: false,
+});
 
 function App() {
   const { user } = useSelector((state) => state.auth);
