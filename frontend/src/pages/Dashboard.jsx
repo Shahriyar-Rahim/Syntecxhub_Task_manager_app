@@ -8,7 +8,7 @@ import TaskForm from "../components/TaskForm";
 import TaskCard from "../components/TaskCard";
 import NotificationController from "../components/NotificationController";
 
-const socket = io("http://localhost:5000", { withCredentials: true });
+const socket = io("https://syntecxhub-task-manager-app-backend.vercel.app", { withCredentials: true });
 
 const Dashboard = () => {
   const [editTask, setEditTask] = useState(null);
